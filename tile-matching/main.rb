@@ -66,6 +66,12 @@ class Tile
       rotate!
     end
   end
+
+  def matches_other_at_orientation? other, orientation
+    my_colour = colour_at(orientation)
+    other_colour = other.colour_at(opposite_orientation_of(orientation))
+    my_colour == @@opposites[other_colour]
+  end
 end
 
 class Puzzle
@@ -171,16 +177,93 @@ class Puzzle
   end
 end
 
-tiles = []
-tiles << Tile.new("C", "Y", "M", "k")
-tiles << Tile.new("C", "m", "K", "m")
-tiles << Tile.new("c", "K", "y", "M")
-tiles << Tile.new("C", "k", "Y", "y")
-placed_tiles = tiles
-tiles << Tile.new("c", "K", "y", "C")
-tiles << Tile.new("C", "K", "k", "c")
-p = Puzzle.new(tiles, 3)
-cands = p.candidates_for_tile_list_at_index(placed_tiles, 3)
-puts "cands: #{cands}"
+@neighbour_graph = {
+                      0 => { 1 => EAST, 3 => SOUTH },
+                      1 => { 0 => WEST, 2 => EAST, 4 => SOUTH },
+                      2 => { 1 => WEST, 5 => SOUTH },
+                      3 => { 0 => NORTH, 4 => EAST },
+                      4 => { 1 => NORTH, 5 => EAST, 7 => SOUTH, 3 => WEST },
+                      5 => { 2 => NORTH, 4 => WEST, 8 => SOUTH },
+                      6 => { 3 => NORTH, 7 => EAST },
+                      7 => { 4 => NORTH, 8 => EAST, 6 => WEST },
+                      8 => { 5 => NORTH, 7 => WEST }
+                    }
 
-# p.solve
+def place_tile(placed_tiles, unplaced_tiles, dbg=false)
+  raise "placed_tiles list cannot be empty" if placed_tiles.empty?
+  idx = placed_tiles.count-1
+  target_tile = placed_tiles[idx]
+  neighbours = @neighbour_graph[idx]
+
+  # find an empty slot next to placed target_tile
+  empty_slots = neighbours.keys
+                .select { |idx| idx if placed_tiles[idx].nil? }
+
+  puts "empty slots: #{empty_slots}" if dbg
+  return [placed_tiles, unplaced_tiles] if empty_slots.empty?
+
+  empty_slot_idx = empty_slots.first
+  orientation_to_match = neighbours[empty_slot_idx]
+
+  # create candidates for target_tile
+  candidates = []
+  unplaced_tiles.each do |candidate|
+    candidate_colour = target_tile.colour_at(orientation_to_match)
+    next unless candidate.can_match_colour? candidate_colour
+    candidate.turn_to_match_tile_at_orientation target_tile, orientation_to_match
+    candidates << candidate
+  end
+  puts "tar: #{target_tile}" if dbg
+  puts "unp: #{unplaced_tiles}" if dbg
+  puts "emtp: #{empty_slot_idx}" if dbg
+
+  # remove rotated candidates that don't match neighbouring tiles
+  candidate_index = empty_slot_idx
+  filtered_candidates = []
+  @neighbour_graph[candidate_index].each_pair do |idx, orientation|
+    neighbour = placed_tiles[idx]
+    next if neighbour.nil?
+    candidates.each do |candidate|
+      filtered_candidates << candidate if candidate.matches_other_at_orientation?(neighbour, orientation)
+    end
+  end
+
+  filtered_candidates
+end
+
+unplaced_tiles = []
+unplaced_tiles << Tile.new(*"CYMk".split(""))
+unplaced_tiles << Tile.new(*"CmKm".split(""))
+unplaced_tiles << Tile.new(*"cKyM".split(""))
+unplaced_tiles << Tile.new(*"cYkY".split(""))
+unplaced_tiles << Tile.new(*"CMky".split(""))
+unplaced_tiles << Tile.new(*"ckyM".split(""))
+unplaced_tiles << Tile.new(*"CYMK".split(""))
+unplaced_tiles << Tile.new(*"CMKy".split(""))
+unplaced_tiles << Tile.new(*"CkmY".split(""))
+
+placed_tiles = [unplaced_tiles.shift]
+def solve placed_tiles, unplaced_tiles
+  puts "placed: #{placed_tiles.count}\nunplaced: #{unplaced_tiles.count}"
+  candidates = place_tile(placed_tiles, unplaced_tiles)
+  candidates.each do |candidate|
+    return solve(placed_tiles + [candidate], unplaced_tiles.select { |tile| tile != candidate } )
+  end
+  return [placed_tiles, unplaced_tiles]
+end
+
+puts solve(placed_tiles, unplaced_tiles)
+
+exit
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+placed_tiles, unplaced_tiles = place_tile(placed_tiles, unplaced_tiles)
+puts "placed: #{placed_tiles}\nunplaced: #{unplaced_tiles}"
