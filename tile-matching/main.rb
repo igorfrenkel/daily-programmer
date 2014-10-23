@@ -6,6 +6,7 @@ WEST = 3
 class Tile
   attr_accessor :orientation, :colours
   @@orientations = {0 => "N", 1 => "E", 2 => "S", 3 => "W"}
+  @@opposites = {"C" => "c", "c" => "C", "Y" => "y", "y" => "Y", "M" => "m", "m" => "M", "K" => "k", "k" => "K"}
   def initialize north, east, south, west
     @colours = []
     @colours[0] = north
@@ -36,6 +37,34 @@ class Tile
 
   def to_s
     return colours.join("") + "<#{orientation}>"
+  end
+
+  def can_match_colour? colour
+    matching_colour = @@opposites[colour]
+    @colours.include? matching_colour
+  end
+
+  def opposite_orientation_of orientation
+    case orientation
+    when EAST
+      WEST
+    when WEST
+      EAST
+    when SOUTH
+      NORTH
+    when NORTH
+      SOUTH
+    end
+  end
+
+  def turn_to_match_tile_at_orientation tile, orientation
+    colour_to_match = tile.colour_at(orientation)
+    raise "Invalid tile supplied" unless can_match_colour? colour_to_match
+    candidate_colour = @@opposites[colour_to_match]
+    candidate_orientation = opposite_orientation_of(orientation)
+    while colour_at(candidate_orientation) != candidate_colour
+      rotate!
+    end
   end
 end
 
@@ -84,18 +113,6 @@ class Puzzle
     result
   end
 
-  def candidates_for_tile_not_in_list tile, orientation, placed_tiles
-    colour = tile.colour_at(orientation)
-    candidate_colour = opposite_colour_of(colour)
-    result = []
-    @tiles.each do |candidate|
-      next if candidate == tile
-      next if placed_tiles.include?(candidate)
-      result << candidate if candidate.colours.include?(candidate_colour)
-    end
-    result
-  end
-
   def solve
     tile_list = []
     tile_list << @tiles.first
@@ -115,52 +132,55 @@ class Puzzle
                         8 => { 5 => NORTH, 7 => WEST }
                       }
 
-  def candidates_for_tile_at_index tile_list, index
-    tile = tile_list[index]
-    neighbours = @@neighbour_graph[index]
-    candidates = []
-
-    5 <- [2, 4]
-    # generate candidates in open direction
-    candidate_orientation = nil
-    neighbours.each_pair do |neighbour_index, orientation|
-      next unless tile_list[neighbour_index].nil?
-      candidate_orientation = orientation
-      candidates = candidates_for_tile_not_in_list(tile, orientation, tile_list)
-    end
-
-    neighbours.each_pair do |neighbour_index, orientation|
-      next if candidate_orientation == orientation
-      next if tile_list[neighbour_index].nil?
-      tile = tile_list[neighbour_index]
-      neighbour_colour = tile.colour_at(orientation)
-      colour_to_match = opposite_colour_of(neighbour_colour)
-    end
-    result
-  end
 
   def solve_tile_list_at_index tile_list, grid_index
     return tile_list if tile_list.length == @tiles.length
     last_placed_tile = tile_list[grid_index]
-    puts "1"
-    candidates = candidates_for_tile_at_index(tile_list, grid_index)
-    puts "2"
-    result = []
-    candidates.each do |candidate|
-      puts "2a"
-      turn_to_match(last_placed_tile, EAST, candidate)
-      puts "2b"
-      result = solve_tile_list_at_index(tile_list + [candidate], grid_index+1)
+    candidates = candidates_for_tile_list_at_index(tile_list, grid_index)
+    return [] if candidates.empty?
+    return result
+  end
+
+  def candidates_for_tile_list_at_index placed_tiles, grid_index
+    tile = placed_tiles[grid_index]
+    neighbours = @@neighbour_graph[grid_index]
+
+    # find one empty space around tile
+    orientation_to_match = nil
+    neighbours.each_pair do |idx,orientation|
+      puts "i,o: #{idx}, #{orientation}"
+      next unless placed_tiles[idx].nil?
+      orientation_to_match = orientation
+      break
     end
-    result
+
+    raise "No candidates possible for tile" if orientation_to_match.nil?
+
+    # find all candidates matching tile at orientation
+    candidates = []
+    @tiles.each do |candidate|
+      next if placed_tiles.include? candidate
+      next unless candidate.can_match_colour? tile.colour_at(orientation_to_match)
+      candidate.turn_to_match_tile_at_orientation tile, orientation_to_match
+      candidates << candidate
+    end
+
+    # find non-empty neighbours around candidates and remove mismatched
+
+    candidates
   end
 end
-
 
 tiles = []
 tiles << Tile.new("C", "Y", "M", "k")
 tiles << Tile.new("C", "m", "K", "m")
 tiles << Tile.new("c", "K", "y", "M")
 tiles << Tile.new("C", "k", "Y", "y")
+placed_tiles = tiles
+tiles << Tile.new("c", "K", "y", "C")
+tiles << Tile.new("C", "K", "k", "c")
 p = Puzzle.new(tiles, 3)
-p.solve
+cands = p.candidates_for_tile_list_at_index(placed_tiles, 3)
+puts "cands: #{cands}"
+
+# p.solve
